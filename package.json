@@ -1,0 +1,12 @@
+{
+  "name": "findpricefeed",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@api3/contracts": "^15.1.0"
+  },
+  "dependencies": {
+    "ethers": "^6.13.5"
+  }
+}
