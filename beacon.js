@@ -1,17 +1,38 @@
 const { ethers } = require("ethers");
 
 // Contract addresses
-// found in https://github.com/api3dao/contracts/blob/main/deployments/ per chain
-// Example Arbitrum One addresses https://github.com/api3dao/contracts/blob/main/deployments/arbitrum/AirseekerRegistry.json
 const api3ServerV1Address = "0x709944a48cAf83535e43471680fDA4905FB3920a";
 const airseekerRegistryAddress = "0x7B42df2563E128Ae3F68e2CFB1904808F61C8F12";
 const api3ServerV1Abi = require("./abis/api3ServerV1.json");
 const airSeekerRegistryAbi = require("./abis/airSeekerRegistry.json");
+
 const provider = new ethers.JsonRpcProvider("https://arb1.arbitrum.io/rpc");
 
 // Helper function to derive OEV template ID
 function deriveOevTemplateId(templateId) {
     return ethers.keccak256(ethers.toBeHex(templateId));
+}
+
+// Helper function to calculate median
+function calculateMedian(values) {
+    if (values.length === 0) return 0;
+    
+    const sorted = values.sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+
+    if (sorted.length % 2 === 0) {
+        return (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+    return sorted[middle];
+}
+
+function formatUSD(value) {
+    return value.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 async function main() {
@@ -55,6 +76,12 @@ async function main() {
         );
 
         console.log("\nBeacons for ETH/USD:");
+        
+        // Array to store all valid prices
+        const validPrices = [];
+        // Array to store detailed price data
+        const priceDetails = [];
+
         for (let i = 0; i < airnodes.length; i++) {
             console.log(`\nBeacon ${i + 1}:`);
             console.log(`Airnode: ${airnodes[i]}`);
@@ -89,15 +116,18 @@ async function main() {
                     const decodedValueWei = BigInt(latestUpdate.encodedValue);
                     const decodedValueUSD = Number(decodedValueWei) / 1e18;
 
+                    // Store the valid price
+                    validPrices.push(decodedValueUSD);
+                    // Store price details
+                    priceDetails.push({
+                        airnode: airnodes[i],
+                        price: decodedValueUSD,
+                        timestamp: new Date(parseInt(latestUpdate.timestamp) * 1000)
+                    });
+
                     console.log(`Latest Update:`);
                     console.log(`Timestamp: ${new Date(parseInt(latestUpdate.timestamp) * 1000).toISOString()}`);
-                    console.log(`Encoded Value: ${latestUpdate.encodedValue}`);
-                    console.log(
-                        `Decoded Value: $${decodedValueUSD.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                        })}`
-                    );
+                    console.log(`Price: ${formatUSD(decodedValueUSD)}`);
                 } else {
                     console.log("No matching updates found for this template ID");
                 }
@@ -108,6 +138,21 @@ async function main() {
                 );
             }
         }
+
+        // Calculate and display median of all Beacon values
+        if (validPrices.length > 0) {
+            const medianPrice = calculateMedian(validPrices);
+            const averagePrice = validPrices.reduce((a, b) => a + b, 0) / validPrices.length;
+            
+            console.log("\n=== ETH/USD Price Summary ===");
+            console.log(`Number of valid price feeds: ${validPrices.length}`);
+            console.log(`Median Price: ${formatUSD(medianPrice)}`);
+            console.log(`Average Price: ${formatUSD(averagePrice)}`);
+
+        } else {
+            console.log("\nNo valid prices found to calculate median");
+        }
+
     } catch (error) {
         console.error("Error:", error);
     }
